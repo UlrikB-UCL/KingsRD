@@ -1,0 +1,111 @@
+#Load the dataset#
+setwd("/Users/ulrikbacke/Documents/UCL/Data Analysis/Tutorials/Tutorial_2/Data")
+#Load the package#
+load("London.RData") #dataset_housing_prices_London_00_23.RData
+#Libraries
+library(tidyverse)
+library(zoo)
+#Get a list of variable names#
+names(dataset)
+# View the structure of the data to understand the data types of each variable#
+str(dataset)
+#Convert year data to numeric if needed#
+dataset$year <- as.numeric(dataset$year)
+#Rename the dataset to prepare for  loading of more datasets
+LondonData <- dataset
+#Filter data by year from 2015-2019#
+filtered_data <- LondonData %>%
+  filter(year %in% c(2015, 2016, 2017, 2018, 2019))
+#Rename the 'Average.minimum.journey.time..minutes' to 'Average time to GP (mins)'#
+names(filtered_data)[names(filtered_data) == "Average.minimum.journey.time..minutes."] <- "Average time to GP (mins)"       
+# Check for missing values in 'priceper' and 'Average time to GP (mins)'#
+missing_values <- sum(is.na(filtered_data$priceper))
+missing_values <- sum(is.na(filtered_data$'Average time to GP (mins)'))
+#Print the number of missing values#
+print(missing_values) 
+#Check for NA,Nan and Inf value in dataset for both variables#
+sum(is.na(filtered_data$priceper))
+sum(is.na(filtered_data$'Average time to GP (mins)'))
+sum(is.nan(filtered_data$'Average time to GP (mins)'))
+sum(is.nan(filtered_data$priceper))
+sum(is.infinite(filtered_data$`Average time to GP (mins)`))
+sum(is.infinite(filtered_data$priceper))
+#Clean the dataset by removing rows with Inf in priceper"
+filtered_dataclean <- filtered_data[!is.infinite(filtered_data$priceper),]
+#Check for potential outliers by using a box plot#
+boxplot(filtered_dataclean$priceper, main = "Box plot of price per", ylab = "priceper")
+#Remove outliers#
+# Calculate Q1 (25th percentile) and Q3 (75th percentile)#
+Q1 <- quantile(filtered_dataclean$priceper, 0.25, na.rm = TRUE)
+Q3 <- quantile(filtered_dataclean$priceper, 0.75, na.rm = TRUE)
+# Calculate the Interquartile Range (IQR)#
+IQR_value <- Q3 - Q1
+# Define lower and upper bounds for outliers#
+lower_bound <- Q1 - 1.5 * IQR_value
+upper_bound <- Q3 + 1.5 * IQR_value
+# Filter out the outliers
+filtered_no_outliers <- filtered_dataclean %>%
+  filter(priceper >= lower_bound & priceper <= upper_bound)
+#Creating new dataset with only price per and avg time to GP#
+price_timetoGP <- filtered_no_outliers[,c(7,48)]
+#Run the London linear regression#
+reg1 <- lm(priceper ~ `Average time to GP (mins)`, data = price_timetoGP)
+#Display the summary of the 1st regression#
+summary(reg1)
+#Run the London logarithmic regression#
+reg2 <- lm(log(priceper) ~ log(`Average time to GP (mins)`) ,data = price_timetoGP)
+summary(reg2)
+#Add in a control variable#
+#Creating new dataset with price per, avg time to GP and general health#
+healthcontrol <- filtered_no_outliers[,c(7,48,81)]
+#Rename the 'General health: Total: All usual residents' to 'generalhealth'#
+names(healthcontrol)[names(healthcontrol) == "General health: Total: All usual residents"] <- "generalhealth"
+# Check for missing values in generalhealth#
+missing_values <- sum(is.na(healthcontrol$generalhealth))
+print(missing_values)
+#Remove rows with missing values#
+healthcontrol <- na.omit(healthcontrol)
+#Clean dataset by removing rows with Inf in priceper"
+healthcontrol <- healthcontrol[!is.infinite(healthcontrol$priceper),]
+#Run regression again with new control variable#
+reg3 <- lm(log(priceper) ~ log(`Average time to GP (mins)`) + generalhealth, data = healthcontrol)
+summary(reg3)
+#Now we will repeat the above process for a different city, Manchester#
+# ---------------------------------------------#
+
+#Load dataset with Manchester#
+load("UK.RData") #dataset_housing_prices_Rest_10_23.RData
+#Renaming the dataset
+ManData <- dataset
+rm(dataset)
+#Filter the dataset to only include Manchester and select only relevant variables
+manchesterData <- ManData %>%
+  filter(ladnm == "Manchester") %>%  # Filter for Manchester
+  select(priceper, year, "Average.minimum.journey.time..minutes.") # Select desired column"
+filtered_dataMan <- manchesterData %>% # Filter for the years 2015 - 2019
+  filter(year %in% c(2015, 2016, 2017, 2018, 2019))
+
+#Renaming the GP variable
+names(filtered_dataMan)[names(filtered_dataMan) == "Average.minimum.journey.time..minutes."] <- "GP_Time" 
+#Remove infinite price/m2 values
+filtered_datacleanMan <- filtered_dataMan[!is.infinite(filtered_dataMan$priceper),]
+
+#Outliers - Cleaning data using IQR
+Q1Man <- quantile(filtered_datacleanMan$priceper, 0.25, na.rm = TRUE)
+Q3Man <- quantile(filtered_datacleanMan$priceper, 0.75, na.rm = TRUE)
+# Calculate the Interquartile Range (IQR)#
+IQR_valueMan <- Q3Man - Q1Man
+# Define lower and upper bounds for outliers#
+lower_boundMan <- Q1Man - 1.5 * IQR_valueMan
+upper_boundMan <- Q3Man + 1.5 * IQR_valueMan
+
+#Create new dataset without outliers
+filtered_no_outliers_Man <- filtered_datacleanMan %>%
+  filter(priceper >= lower_boundMan & priceper <= upper_boundMan)
+
+#Creating new dataset with only price per and avg time to GP#
+price_timetoGPMan <- filtered_no_outliers_Man[,c(1,3)]
+#Run the Manchester logarithmic regression#
+reg1Man <- lm(log(priceper) ~ log(`GP_Time`), data = price_timetoGPMan)
+#Display the summary of the Manchester regression#
+summary(reg1Man)
